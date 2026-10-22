@@ -32,6 +32,10 @@ class AlarmService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val id = intent?.getLongExtra(EXTRA_EVENT, -1) ?: -1
         when (intent?.action) {
+            ACTION_TEST -> {
+                startTest()
+                return START_NOT_STICKY
+            }
             ACTION_DISMISS -> {
                 active.remove(id)
                 if (active.isEmpty()) stopRinging()
@@ -61,6 +65,39 @@ class AlarmService : Service() {
                 startSound(s.alarmSound, s.alarmVibrate)
                 handler.removeCallbacks(timeout)
                 handler.postDelayed(timeout, RING_LIMIT_MS)
+            }
+        }
+    }
+
+    /** Rings with the chosen alarm sound and vibration for a few seconds so the setup can be checked. */
+    private fun startTest() {
+        val stop = android.app.PendingIntent.getService(
+            this, 7,
+            Intent(this, AlarmService::class.java).setAction(ACTION_DISMISS).putExtra(EXTRA_EVENT, TEST_EVENT),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = androidx.core.app.NotificationCompat.Builder(this, Notifier.CH_ALARM)
+            .setSmallIcon(com.adman234.pillbox.R.drawable.ic_stat_pill)
+            .setContentTitle("Test alarm")
+            .setContentText("Ringing for a few seconds")
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_ALARM)
+            .setOngoing(true)
+            .addAction(0, "Stop", stop)
+            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(Notifier.TEST_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(Notifier.TEST_ID, n)
+        }
+        active += TEST_EVENT
+        app.appScope.launch {
+            val s = app.settings.current()
+            handler.post {
+                startSound(s.alarmSound, s.alarmVibrate)
+                handler.postDelayed({
+                    active.remove(TEST_EVENT)
+                    if (active.isEmpty()) stopRinging()
+                }, TEST_MS)
             }
         }
     }
@@ -167,6 +204,13 @@ class AlarmService : Service() {
         const val EXTRA_EVENT = "event"
         const val ACTION_DISMISS = "com.adman234.pillbox.DISMISS_ALARM"
         const val RING_LIMIT_MS = 2L * 60 * 1000
+        const val ACTION_TEST = "com.adman234.pillbox.TEST_ALARM"
+        private const val TEST_EVENT = -2L
+        private const val TEST_MS = 8_000L
+
+        fun startTest(ctx: Context) {
+            ctx.startForegroundService(Intent(ctx, AlarmService::class.java).setAction(ACTION_TEST))
+        }
 
         @Volatile
         var isRunning = false

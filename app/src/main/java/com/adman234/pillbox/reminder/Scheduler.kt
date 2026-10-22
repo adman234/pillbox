@@ -61,21 +61,31 @@ class Scheduler(
         db.doses().pendingIdsForMed(medId).forEach { cancelAlarm(it); Notifier.dismiss(ctx, it) }
     }
 
-    suspend fun act(eventId: Long, action: DoseAction) = mutex.withLock {
+    /** [feedback] posts a short-lived confirmation; used when the action came from a notification or alarm screen. */
+    suspend fun act(eventId: Long, action: DoseAction, feedback: Boolean = false) = mutex.withLock {
         val e = db.doses().get(eventId) ?: return@withLock
         val now = System.currentTimeMillis()
-        when (action) {
-            DoseAction.TAKE -> finish(e, DoseStatus.TAKEN, now)
-            DoseAction.SKIP -> finish(e, DoseStatus.SKIPPED, now)
+        val med = db.meds().get(e.medId)
+        val s = settings.current()
+        val message = when (action) {
+            DoseAction.TAKE -> {
+                finish(e, DoseStatus.TAKEN, now)
+                "Medication taken"
+            }
+            DoseAction.SKIP -> {
+                finish(e, DoseStatus.SKIPPED, now)
+                "Dose skipped"
+            }
             DoseAction.SNOOZE -> {
                 if (e.status != DoseStatus.PENDING) return@withLock
-                val s = settings.current()
                 val upd = e.copy(nextFireAt = now + s.snoozeMinutes * 60_000L, fireCount = 0)
                 db.doses().update(upd)
                 Notifier.dismiss(ctx, e.id)
-                db.meds().get(e.medId)?.let { arm(upd, it) }
+                med?.let { arm(upd, it) }
+                "Snoozed for ${s.snoozeMinutes} min"
             }
         }
+        if (feedback && med != null) Notifier.feedback(ctx, e.id, message, med.name, med.color)
     }
 
     /** Log a dose that was not scheduled ("take now", as-needed medication). */

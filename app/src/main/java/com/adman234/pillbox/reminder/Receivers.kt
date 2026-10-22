@@ -44,11 +44,14 @@ class ActionReceiver : BroadcastReceiver() {
         val id = intent.getLongExtra(EXTRA_EVENT, -1)
         val action = intent.getStringExtra(EXTRA_ACTION)?.let { runCatching { DoseAction.valueOf(it) }.getOrNull() }
         if (id < 0 || action == null) return
-        async(context) { context.app.scheduler.act(id, action) }
+        // A swipe-away arrives as a snooze with feedback turned off.
+        val feedback = intent.getBooleanExtra(EXTRA_FEEDBACK, true)
+        async(context) { context.app.scheduler.act(id, action, feedback) }
     }
 
     companion object {
         const val EXTRA_EVENT = "event"
         const val EXTRA_ACTION = "action"
+        const val EXTRA_FEEDBACK = "feedback"
     }
 }

@@ -26,7 +26,14 @@ enum class DoseAction { TAKE, SKIP, SNOOZE }
 
 object Notifier {
     const val CH_ALARM = "alarm_service"
+    const val CH_FEEDBACK = "feedback"
     private const val CH_PREFIX = "rem_"
+    private const val FEEDBACK_MS = 3_000L
+    private const val FEEDBACK_ID_OFFSET = 1_000_000
+    const val TEST_ID = 9_999
+
+    /** Fixed accent: a pill color such as white or cream would vanish against the shade. */
+    private const val ACCENT = 0xFFFF7A59.toInt()
 
     fun notifId(eventId: Long): Int = (10_000 + eventId).toInt()
 
@@ -76,6 +83,54 @@ object Notifier {
             enableVibration(false)
         }
         nm.createNotificationChannel(alarm)
+
+        val feedback = NotificationChannel(CH_FEEDBACK, "Confirmations", NotificationManager.IMPORTANCE_LOW).apply {
+            description = "Brief confirmation after you tap Take, Skip or Snooze"
+            setSound(null, null)
+            enableVibration(false)
+        }
+        nm.createNotificationChannel(feedback)
+    }
+
+    /** A quiet confirmation that replaces the reminder for a few seconds, then disappears. */
+    fun feedback(ctx: Context, eventId: Long, message: String, medName: String, color: Int) {
+        val n = NotificationCompat.Builder(ctx, CH_FEEDBACK)
+            .setSmallIcon(R.drawable.ic_stat_pill)
+            .setColor(ACCENT)
+            .setContentTitle(message)
+            .setContentText(medName)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setTimeoutAfter(FEEDBACK_MS)
+            .build()
+        try {
+            ctx.getSystemService(NotificationManager::class.java).notify(notifId(eventId) + FEEDBACK_ID_OFFSET, n)
+        } catch (_: SecurityException) {
+        }
+    }
+
+    /** Sent from Settings to check sound, vibration and permissions without waiting for a real dose. */
+    fun postTest(ctx: Context, s: Settings) {
+        val open = PendingIntent.getActivity(
+            ctx, 0, Intent(ctx, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = NotificationCompat.Builder(ctx, reminderChannelId(s))
+            .setSmallIcon(R.drawable.ic_stat_pill)
+            .setContentTitle("Test reminder")
+            .setContentText("If you can see and hear this, notification reminders work.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .setTimeoutAfter(30_000)
+            .build()
+        try {
+            ctx.getSystemService(NotificationManager::class.java).notify(TEST_ID, n)
+        } catch (_: SecurityException) {
+        }
     }
 
     fun build(
@@ -101,7 +156,7 @@ object Notifier {
         )
         val b = NotificationCompat.Builder(ctx, channel)
             .setSmallIcon(R.drawable.ic_stat_pill)
-            .setColor(med.color)
+            .setColor(ACCENT)
             .setContentTitle("Time to take ${med.name}")
             .setContentText(text.lineSequence().first())
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -113,6 +168,8 @@ object Notifier {
             .setCategory(if (alarm) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setContentIntent(open)
+            // Swiping the notification away counts as a snooze, without the confirmation.
+            .setDeleteIntent(swipePi(ctx, e.id))
             .addAction(0, "Take", actionPi(ctx, e.id, DoseAction.TAKE))
             .addAction(0, "Skip", actionPi(ctx, e.id, DoseAction.SKIP))
             .addAction(0, "Snooze ${s.snoozeMinutes}m", actionPi(ctx, e.id, DoseAction.SNOOZE))
@@ -126,6 +183,18 @@ object Notifier {
         }
         return b.build()
     }
+
+    private fun swipePi(ctx: Context, eventId: Long): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx,
+            (eventId * 4 + 3).toInt(),
+            Intent(ctx, ActionReceiver::class.java)
+                .setAction("com.adman234.pillbox.SWIPED")
+                .putExtra(ActionReceiver.EXTRA_EVENT, eventId)
+                .putExtra(ActionReceiver.EXTRA_ACTION, DoseAction.SNOOZE.name)
+                .putExtra(ActionReceiver.EXTRA_FEEDBACK, false),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
     fun actionPi(ctx: Context, eventId: Long, action: DoseAction): PendingIntent =
         PendingIntent.getBroadcast(

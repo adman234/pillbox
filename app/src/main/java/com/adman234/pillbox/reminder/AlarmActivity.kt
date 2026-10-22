@@ -48,7 +48,7 @@ class AlarmActivity : ComponentActivity() {
         setContent {
             PillboxTheme {
                 AlarmScreen(eventId, onAction = { action ->
-                    app.appScope.launch { app.scheduler.act(eventId, action) }
+                    app.appScope.launch { app.scheduler.act(eventId, action, feedback = true) }
                     finish()
                 }, onGone = { finish() })
             }

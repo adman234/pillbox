@@ -57,6 +57,7 @@ import com.adman234.pillbox.data.Backup
 import com.adman234.pillbox.data.SOUND_DEFAULT
 import com.adman234.pillbox.data.SOUND_SILENT
 import com.adman234.pillbox.data.Settings
+import com.adman234.pillbox.reminder.AlarmService
 import com.adman234.pillbox.reminder.Notifier
 import kotlinx.coroutines.launch
 
@@ -314,6 +315,13 @@ private fun HealthSection() {
             )
             if (!c.ok) OutlinedButton(onClick = c.action) { Text(c.fix) }
         }
+    }
+    val scope = rememberCoroutineScope()
+    Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = {
+            scope.launch { Notifier.postTest(ctx, ctx.app.settings.current()) }
+        }) { Text("Test notification") }
+        OutlinedButton(onClick = { AlarmService.startTest(ctx) }) { Text("Test alarm") }
     }
     Text(
         "Some phone makers also stop apps in the background. If reminders arrive late, allow Pillbox to run without restrictions in the phone's battery settings.",
