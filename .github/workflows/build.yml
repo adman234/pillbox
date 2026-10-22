@@ -1,0 +1,68 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - name: Debug build (branches and pull requests)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: ./gradlew assembleDebug
+
+      - name: Work out version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "${TAG%%-*}"
+          echo "VERSION_NAME=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))" >> "$GITHUB_ENV"
+
+      - name: Decode signing key
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_B64: ${{ secrets.PILLBOX_KEYSTORE_B64 }}
+        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/pillbox.p12"
+
+      - name: Signed release build
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          PILLBOX_KEYSTORE: ${{ runner.temp }}/pillbox.p12
+          PILLBOX_KEYSTORE_PASSWORD: ${{ secrets.PILLBOX_KEYSTORE_PASSWORD }}
+          PILLBOX_KEY_ALIAS: pillbox
+        run: ./gradlew assembleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE"
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "pillbox-${GITHUB_REF_NAME}.apk"
+          gh release create "$GITHUB_REF_NAME" "pillbox-${GITHUB_REF_NAME}.apk" \
+            --title "Pillbox ${GITHUB_REF_NAME}" --generate-notes
+
+      - name: Upload debug APK
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pillbox-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
