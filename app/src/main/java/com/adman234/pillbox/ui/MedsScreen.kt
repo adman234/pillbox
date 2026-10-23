@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -93,13 +94,14 @@ fun MedsScreen(onAdd: () -> Unit, onEdit: (Long) -> Unit) {
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reminder", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = { scope.launch { ctx.app.scheduler.logExtraDose(m.id) } }) { Text("Take now") }
+                            Text("Reminder", style = MaterialTheme.typography.bodyMedium)
                             Switch(
                                 checked = m.reminderEnabled,
                                 onCheckedChange = { on -> scope.launch { ctx.app.meds.setReminderEnabled(m, on) } },
-                                modifier = Modifier.size(width = 52.dp, height = 32.dp),
+                                modifier = Modifier.padding(start = 12.dp),
                             )
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { scope.launch { ctx.app.scheduler.logExtraDose(m.id) } }) { Text("Take now") }
                         }
                     }
                 }

@@ -39,6 +39,11 @@ class AlarmService : Service() {
             ACTION_DISMISS -> {
                 active.remove(id)
                 if (active.isEmpty()) stopRinging()
+                // Posted after the foreground notification is gone, so it replaces rather than races it.
+                val message = intent.getStringExtra(EXTRA_MESSAGE)
+                if (message != null) {
+                    Notifier.confirmation(this, id, message, intent.getStringExtra(EXTRA_MED_NAME).orEmpty())
+                }
                 return START_NOT_STICKY
             }
             else -> if (id >= 0) ring(id, startId)
@@ -202,6 +207,8 @@ class AlarmService : Service() {
 
     companion object {
         const val EXTRA_EVENT = "event"
+        const val EXTRA_MESSAGE = "message"
+        const val EXTRA_MED_NAME = "med_name"
         const val ACTION_DISMISS = "com.adman234.pillbox.DISMISS_ALARM"
         const val RING_LIMIT_MS = 2L * 60 * 1000
         const val ACTION_TEST = "com.adman234.pillbox.TEST_ALARM"
@@ -222,10 +229,14 @@ class AlarmService : Service() {
             )
         }
 
-        fun dismiss(ctx: Context, eventId: Long) {
+        fun dismiss(ctx: Context, eventId: Long, message: String? = null, medName: String? = null) {
             if (!isRunning) return
             ctx.startService(
-                Intent(ctx, AlarmService::class.java).setAction(ACTION_DISMISS).putExtra(EXTRA_EVENT, eventId),
+                Intent(ctx, AlarmService::class.java)
+                    .setAction(ACTION_DISMISS)
+                    .putExtra(EXTRA_EVENT, eventId)
+                    .putExtra(EXTRA_MESSAGE, message)
+                    .putExtra(EXTRA_MED_NAME, medName),
             )
         }
     }

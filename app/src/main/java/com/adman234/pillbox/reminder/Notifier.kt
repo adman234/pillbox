@@ -26,10 +26,9 @@ enum class DoseAction { TAKE, SKIP, SNOOZE }
 
 object Notifier {
     const val CH_ALARM = "alarm_service"
-    const val CH_FEEDBACK = "feedback"
+    const val CH_FEEDBACK = "confirm"
     private const val CH_PREFIX = "rem_"
     private const val FEEDBACK_MS = 3_000L
-    private const val FEEDBACK_ID_OFFSET = 1_000_000
     const val TEST_ID = 9_999
 
     /** Fixed accent: a pill color such as white or cream would vanish against the shade. */
@@ -84,29 +83,41 @@ object Notifier {
         }
         nm.createNotificationChannel(alarm)
 
-        val feedback = NotificationChannel(CH_FEEDBACK, "Confirmations", NotificationManager.IMPORTANCE_LOW).apply {
+        // Silent but high importance, so the confirmation can still show over the screen.
+        // (An older low-importance "feedback" channel is replaced because importance cannot be raised later.)
+        nm.deleteNotificationChannel("feedback")
+        val confirm = NotificationChannel(CH_FEEDBACK, "Confirmations", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Brief confirmation after you tap Take, Skip or Snooze"
             setSound(null, null)
             enableVibration(false)
         }
-        nm.createNotificationChannel(feedback)
+        nm.createNotificationChannel(confirm)
     }
 
-    /** A quiet confirmation that replaces the reminder for a few seconds, then disappears. */
-    fun feedback(ctx: Context, eventId: Long, message: String, medName: String, color: Int) {
+    /**
+     * Turns the reminder into a short confirmation: the same notification id is posted again with
+     * new text and no buttons, then times out. Alarm reminders are owned by [AlarmService], which
+     * stops first and then posts the confirmation so the two cannot race.
+     */
+    fun replaceWithConfirmation(ctx: Context, eventId: Long, message: String, medName: String) {
+        if (AlarmService.isRunning) AlarmService.dismiss(ctx, eventId, message, medName)
+        else confirmation(ctx, eventId, message, medName)
+    }
+
+    fun confirmation(ctx: Context, eventId: Long, message: String, medName: String) {
         val n = NotificationCompat.Builder(ctx, CH_FEEDBACK)
             .setSmallIcon(R.drawable.ic_stat_pill)
             .setColor(ACCENT)
             .setContentTitle(message)
             .setContentText(medName)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSilent(true)
             .setAutoCancel(true)
             .setTimeoutAfter(FEEDBACK_MS)
             .build()
         try {
-            ctx.getSystemService(NotificationManager::class.java).notify(notifId(eventId) + FEEDBACK_ID_OFFSET, n)
+            ctx.getSystemService(NotificationManager::class.java).notify(notifId(eventId), n)
         } catch (_: SecurityException) {
         }
     }

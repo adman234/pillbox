@@ -80,12 +80,13 @@ class Scheduler(
                 if (e.status != DoseStatus.PENDING) return@withLock
                 val upd = e.copy(nextFireAt = now + s.snoozeMinutes * 60_000L, fireCount = 0)
                 db.doses().update(upd)
-                Notifier.dismiss(ctx, e.id)
                 med?.let { arm(upd, it) }
                 "Snoozed for ${s.snoozeMinutes} min"
             }
         }
-        if (feedback && med != null) Notifier.feedback(ctx, e.id, message, med.name, med.color)
+        // The reminder itself turns into the confirmation (same notification id), then times out.
+        if (feedback && med != null) Notifier.replaceWithConfirmation(ctx, e.id, message, med.name)
+        else Notifier.dismiss(ctx, e.id)
     }
 
     /** Log a dose that was not scheduled ("take now", as-needed medication). */
@@ -118,7 +119,6 @@ class Scheduler(
     private suspend fun finish(e: DoseEvent, status: DoseStatus, now: Long) {
         db.doses().update(e.copy(status = status, actedAt = now, nextFireAt = NEVER))
         cancelAlarm(e.id)
-        Notifier.dismiss(ctx, e.id)
     }
 
     private suspend fun reconcileLocked(now: Long, rebuildFuture: Boolean) {

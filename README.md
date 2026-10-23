@@ -12,7 +12,7 @@ A simple, private pill reminder for Android. No account, no ads, no internet per
   - every day, on specific weekdays, or every X days
   - continuous, or for a set number of days
   - as a notification or as a full screen alarm
-- **Take, Skip or Snooze** straight from the notification or alarm screen. A short confirmation appears after each tap, and swiping a reminder away counts as a snooze.
+- **Take, Skip or Snooze** straight from the notification or alarm screen. The reminder turns into a short confirmation for a few seconds after each tap, and swiping a reminder away counts as a snooze.
 - **Schedule:** the day's doses with Take and Skip buttons, plus a forecast for future days.
 - **History:** every taken, skipped and missed dose. Edit entries, filter by medication, export to CSV.
 - **Settings:** sound and vibration for notifications and alarms (or silent), auto repeat until done, snooze length, daylight saving behavior, show last dose.
